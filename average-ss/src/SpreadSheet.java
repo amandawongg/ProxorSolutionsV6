@@ -94,16 +94,79 @@ public class SpreadSheet extends JFrame {
     // parameter keeps track of the length of the dependency chain.
     // Returns a string if value is valid, otherwise null.
     public String evaluateToken(String tok, int depth) {
-        if (tok.length() >= 2 && tok.charAt(0) >= 'A' && 
-            tok.charAt(0) < (char) ('A' + maxCols)) {
-            int col = tok.charAt(0) - 'A';
-            int row = Integer.parseInt(tok.substring(1)) - 1;
-            if (row >= 0 && row < maxRows) {
-                if (!cells[row][col].valid) {
-                    evaluate(row, col, depth + 1);
+        // "AVG", "(", "A1", ":", "C1", ")"
+        if (tok.indexOf("AVG") == 0) {    // Checks that the current token begins with the formula AVG
+            StringTokenizer tokens = new StringTokenizer(tok, "():", true);
+            if (!tokens.hasMoreTokens()) return null;
+            String tok2 = tokens.nextToken();
+            if (tok2 == null || !tok2.equals("(")) return null;
+
+            // Start cell tok3
+            if (!tokens.hasMoreTokens()) return null;
+            String tok3 = tokens.nextToken();
+            if (tok3 == null) return null;
+            
+            if (!tokens.hasMoreTokens()) return null;
+            String tok4 = tokens.nextToken();
+            if (tok4 == null || !tok4.equals(":")) return null;
+            
+            // End cell tok5
+            if (!tokens.hasMoreTokens()) return null;
+            String tok5 = tokens.nextToken();
+            if (tok5 == null) return null;
+            
+            if (!tokens.hasMoreTokens()) return null;
+            String tok6 = tokens.nextToken();
+            if (tok6 == null || !tok6.equals(")")) return null;
+            
+            // Same column
+            if (tok3.charAt(0) == tok5.charAt(0)) {
+                int cell1Row = Integer.parseInt(tok3.substring(1));
+                int cell2Row = Integer.parseInt(tok5.substring(1));
+                int biggerRow = Math.max(cell1Row, cell2Row);
+                int smallerRow = Math.min(cell1Row, cell2Row);
+                
+                tok = "0"; // Now used as total
+                for (int i = smallerRow; i <= biggerRow; i++) {
+                    String tokSum = Character.toString(tok3.charAt(0)) + i;
+                    tokSum = evaluateToken(tokSum, depth);
+                    if (tokSum == null) return null;
+                    tok = add(tok, tokSum);
                 }
-                if (cells[row][col].bottom) return null;
-                return cellsTF[row][col].getText();
+                tok = divide(tok, String.valueOf(biggerRow - smallerRow + 1));
+                
+            // Same row
+            } else if (tok3.substring(1).equals(tok5.substring(1))) {
+                Character cell1Col = tok3.charAt(0);
+                Character cell2Col = tok5.charAt(0);
+                int biggerCol = Math.max(cell1Col, cell2Col);
+                int smallerCol = Math.min(cell1Col, cell2Col);
+                
+                tok = "0"; // Now used as total
+                for (int i = smallerCol; i <= biggerCol; i++) {
+                    String tokSum = (char)i + tok3.substring(1);
+                    tokSum = evaluateToken(tokSum, depth);
+                    if (tokSum == null) return null;
+                    tok = add(tok, tokSum);
+                }
+                tok = divide(tok, String.valueOf(biggerCol - smallerCol + 1));
+                
+            } else {
+                return null;
+            }
+            return tok;
+        } else {
+            if (tok.length() >= 2 && tok.charAt(0) >= 'A' && 
+                tok.charAt(0) < (char) ('A' + maxCols)) {
+                int col = tok.charAt(0) - 'A';
+                int row = Integer.parseInt(tok.substring(1)) - 1;
+                if (row >= 0 && row < maxRows) {
+                    if (!cells[row][col].valid) {
+                        evaluate(row, col, depth + 1);
+                    }
+                    if (cells[row][col].bottom) return null;
+                    return cellsTF[row][col].getText();
+                }
             }
         }
         return null;
@@ -143,87 +206,24 @@ public class SpreadSheet extends JFrame {
             throws NumberFormatException {
         if (tokens.hasMoreTokens()) {
             String tok = tokens.nextToken();
-
-            // "AVG", "(", "A1", ":", "C1", ")"
-            if (tok.equals("AVG")) {
-                if (!tokens.hasMoreTokens()) return null;
+            tok = evaluateToken(tok, depth);
+            if (tok == null) return null;
+            while (tokens.hasMoreTokens()) {
                 String tok2 = tokens.nextToken();
-                if (tok2 == null || !tok2.equals("(")) return null;
-
-                // Start cell tok3
+                if (tok2 == null) return null;
                 if (!tokens.hasMoreTokens()) return null;
                 String tok3 = tokens.nextToken();
+                tok3 = evaluateToken(tok3, depth);
                 if (tok3 == null) return null;
-                
-                if (!tokens.hasMoreTokens()) return null;
-                String tok4 = tokens.nextToken();
-                if (tok4 == null || !tok4.equals(":")) return null;
-                
-                // End cell tok5
-                if (!tokens.hasMoreTokens()) return null;
-                String tok5 = tokens.nextToken();
-                if (tok5 == null) return null;
-                
-                if (!tokens.hasMoreTokens()) return null;
-                String tok6 = tokens.nextToken();
-                if (tok6 == null || !tok6.equals(")")) return null;
-                
-                // Same column
-                if (tok3.charAt(0) == tok5.charAt(0)) {
-                	int cell1Row = Integer.parseInt(tok3.substring(1));
-                	int cell2Row = Integer.parseInt(tok5.substring(1));
-                	int biggerRow = Math.max(cell1Row, cell2Row);
-                	int smallerRow = Math.min(cell1Row, cell2Row);
-                	
-                	tok = "0"; // Now used as total
-                	for (int i = smallerRow; i <= biggerRow; i++) {
-						String tokSum = Character.toString(tok3.charAt(0)) + i;
-						tokSum = evaluateToken(tokSum, depth);
-						if (tokSum == null) return null;
-						tok = add(tok, tokSum);
-					}
-                	tok = divide(tok, String.valueOf(biggerRow - smallerRow + 1));
-                	
-                // Same row
-                } else if (tok3.substring(1).equals(tok5.substring(1))) {
-                	Character cell1Col = tok3.charAt(0);
-                	Character cell2Col = tok5.charAt(0);
-                	int biggerCol = Math.max(cell1Col, cell2Col);
-                	int smallerCol = Math.min(cell1Col, cell2Col);
-                	
-                	tok = "0"; // Now used as total
-                	for (int i = smallerCol; i <= biggerCol; i++) {
-						String tokSum = (char)i + tok3.substring(1);
-						tokSum = evaluateToken(tokSum, depth);
-						if (tokSum == null) return null;
-						tok = add(tok, tokSum);
-					}
-                	tok = divide(tok, String.valueOf(biggerCol - smallerCol + 1));
-                	
-                } else {
-                	return null;
-                }
-                
-            } else {
-            	tok = evaluateToken(tok, depth);
-                if (tok == null) return null;
-                while (tokens.hasMoreTokens()) {
-                    String tok2 = tokens.nextToken();
-                    if (tok2 == null) return null;
-                    if (!tokens.hasMoreTokens()) return null;
-                    String tok3 = tokens.nextToken();
-                    tok3 = evaluateToken(tok3, depth);
-                    if (tok3 == null) return null;
-                    if (tok2.equals("+")) {
-                        tok = add(tok, tok3);
-                    } else if (tok2.equals("*")) {
-                    	tok = multiply(tok, tok3);
-                    } else if (tok2.equals("/")) {
-                    	tok = divide(tok, tok3);
-                    } else if (tok2.equals("-")) {
-                    	tok = subtract(tok, tok3);
-                    } else return null; // invalid operator
-                }
+                if (tok2.equals("+")) {
+                    tok = add(tok, tok3);
+                } else if (tok2.equals("*")) {
+                    tok = multiply(tok, tok3);
+                } else if (tok2.equals("/")) {
+                    tok = divide(tok, tok3);
+                } else if (tok2.equals("-")) {
+                    tok = subtract(tok, tok3);
+                } else return null; // invalid operator
             }
             return tok;
         }
@@ -240,7 +240,7 @@ public class SpreadSheet extends JFrame {
         if (formula.length() > 0 && formula.charAt(0) == '=') {
             try {
                 if (depth <= maxRows * maxCols) {
-                    StringTokenizer tokens = new StringTokenizer(formula, "=+*/-():", true);
+                    StringTokenizer tokens = new StringTokenizer(formula, "=+*/-", true);
                     if (tokens.hasMoreTokens() && 
                         (tokens.nextToken().equals("="))) {
                         String val = parseFormula(tokens, depth);
